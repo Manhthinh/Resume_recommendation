@@ -5,36 +5,66 @@ from __future__ import annotations
 import json
 import os
 import re
+from pathlib import Path
 from typing import Dict, List
 
 import fitz  # PyMuPDF
 from docx import Document
 
 
+BASE_DIR = Path(__file__).resolve().parents[2]
+SKILL_CATALOG_PATH = BASE_DIR / "data" / "skill_catalog.json"
+
 SKILL_VOCAB = [
-    "python", "sql", "excel", "power bi", "tableau", "pandas", "numpy",
-    "machine learning", "deep learning", "pytorch", "tensorflow", "scikit-learn",
+    "python", "sql", "excel", "power bi", "powerbi", "tableau",
+    "pandas", "numpy", "machine learning", "deep learning",
+    "pytorch", "tensorflow", "scikit-learn", "sklearn",
     "spark", "hadoop", "airflow", "etl", "nlp", "computer vision",
-    "statistics", "data visualization", "dashboard", "git", "docker",
-    "linux", "mysql", "postgresql", "mongodb", "aws", "azure", "gcp",
-    "llm", "rag", "langchain", "streamlit", "flask", "fastapi"
+    "statistics", "data visualization", "dashboard", "dashboarding",
+    "git", "docker", "linux", "mysql", "postgresql", "postgres",
+    "mongodb", "aws", "azure", "gcp", "llm", "rag", "langchain",
+    "streamlit", "flask", "fastapi", "power query"
 ]
+
 
 ROLE_KEYWORDS = {
     "Data Analyst": [
-        "data analyst", "business analyst", "bi analyst", "reporting", "dashboard"
+        "data analyst",
+        "bi analyst",
+        "business intelligence",
+        "power bi",
+        "tableau",
+        "dashboard"
     ],
     "Data Engineer": [
-        "data engineer", "etl", "pipeline", "data warehouse", "airflow", "spark"
+        "data engineer",
+        "etl",
+        "data pipeline",
+        "data warehouse",
+        "airflow",
+        "spark"
     ],
     "AI Engineer": [
-        "ai engineer", "machine learning engineer", "ml engineer", "deployment", "llm"
+        "ai engineer",
+        "machine learning engineer",
+        "ml engineer",
+        "model deployment",
+        "llm"
     ],
     "AI Researcher": [
-        "ai researcher", "research scientist", "research assistant", "paper", "experiment"
+        "ai researcher",
+        "research scientist",
+        "research assistant",
+        "paper",
+        "experiment"
     ],
+    "Data Scientist": [
+        "data scientist",
+        "machine learning",
+        "predictive modeling",
+        "statistical modeling"
+    ]
 }
-
 EDUCATION_KEYWORDS = [
     "university", "college", "đại học", "cao đẳng", "bachelor", "master",
     "cử nhân", "thạc sĩ", "khoa học dữ liệu", "data science", "computer science",
@@ -85,17 +115,21 @@ def extract_phone(text: str) -> str:
     match = re.search(r"(\+?\d[\d\s\-().]{8,}\d)", text)
     return match.group(0).strip() if match else ""
 
+def load_skill_catalog() -> Dict[str, List[str]]:
+    with open(SKILL_CATALOG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-def extract_skills(text: str) -> List[str]:
+def extract_skills(text: str, skill_catalog: Dict[str, List[str]]) -> List[str]:
     lowered = text.lower()
     found = []
 
-    for skill in SKILL_VOCAB:
-        pattern = r"\b" + re.escape(skill.lower()) + r"\b"
-        if re.search(pattern, lowered):
-            found.append(skill)
+    for canonical_skill, aliases in skill_catalog.items():
+        for alias in aliases:
+            pattern = r"\b" + re.escape(alias.lower()) + r"\b"
+            if re.search(pattern, lowered):
+                found.append(canonical_skill)
+                break
 
-    # loại trùng giữ thứ tự
     unique = []
     seen = set()
     for item in found:
@@ -109,20 +143,23 @@ def extract_skills(text: str) -> List[str]:
 
 def guess_target_role(text: str, skills: List[str]) -> str:
     lowered = text.lower()
-
     role_scores = {}
+
     for role, keywords in ROLE_KEYWORDS.items():
         score = 0
         for kw in keywords:
             if kw in lowered:
                 score += 2
-        for skill in skills:
-            if skill.lower() in " ".join(keywords):
-                score += 1
         role_scores[role] = score
 
     best_role = max(role_scores, key=role_scores.get)
-    return best_role if role_scores[best_role] > 0 else "Unknown"
+    best_score = role_scores[best_role]
+
+    # Nếu không có tín hiệu đủ mạnh thì trả Unknown
+    if best_score < 2:
+        return "Unknown"
+
+    return best_role
 
 
 def extract_education_signals(text: str) -> List[str]:
@@ -140,7 +177,7 @@ def extract_education_signals(text: str) -> List[str]:
 
 def guess_experience_years(text: str) -> str:
     lowered = text.lower()
-
+    
     # tìm pattern dạng 1 year / 2 years / 3 năm
     patterns = [
         r"(\d+)\+?\s*(?:years|year)",
@@ -159,24 +196,29 @@ def guess_experience_years(text: str) -> str:
         return str(max(values))
 
     # heuristic cơ bản
-    if "intern" in lowered or "fresher" in lowered or "sinh viên" in lowered:
+    if any(x in lowered for x in ["intern", "fresher", "sinh viên", "new graduate", "recent graduate"]):
         return "0"
 
     return "Unknown"
 
 
 def summarize_projects(text: str) -> List[str]:
-    # bản MVP: chỉ lấy vài câu chứa project / dự án
-    candidates = re.split(r"[.\n]", text)
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
     result = []
-    for line in candidates:
-        line_clean = line.strip()
-        lowered = line_clean.lower()
-        if any(k in lowered for k in ["project", "dự án", "dashboard", "analysis", "model"]):
-            if 10 <= len(line_clean) <= 200:
-                result.append(line_clean)
 
-    # loại trùng
+    project_keywords = ["project", "dự án", "dashboard"]
+    noisy_keywords = ["project management", "managed projects", "scheduling"]
+
+    for line in lines:
+        lowered = line.lower()
+
+        if any(k in lowered for k in noisy_keywords):
+            continue
+
+        if any(k in lowered for k in project_keywords):
+            if 15 <= len(line) <= 180:
+                result.append(line)
+
     unique = []
     seen = set()
     for item in result:
@@ -186,13 +228,57 @@ def summarize_projects(text: str) -> List[str]:
             unique.append(item)
 
     return unique[:5]
+def extract_relevant_skill_text(raw_text: str) -> str:
+    """
+    Ưu tiên lấy text từ các section có khả năng chứa skill.
+    Nếu không tìm thấy, fallback về toàn văn bản.
+    """
+    text = raw_text.replace("\r", "\n")
+    lowered = text.lower()
 
+    section_keywords = [
+        "skills", "technical skills", "core competencies",
+        "kỹ năng", "công cụ", "technologies", "tools"
+    ]
+
+    lines = text.splitlines()
+    selected_lines = []
+
+    capture = False
+    for line in lines:
+        line_clean = line.strip()
+        line_lower = line_clean.lower()
+
+        if any(k in line_lower for k in section_keywords):
+            capture = True
+            selected_lines.append(line_clean)
+            continue
+
+        # dừng khi gặp section mới khá rõ
+        if capture and any(
+            x in line_lower for x in [
+                "experience", "education", "summary", "about me",
+                "work history", "projects", "certifications",
+                "học vấn", "kinh nghiệm", "dự án"
+            ]
+        ):
+            capture = False
+
+        if capture and line_clean:
+            selected_lines.append(line_clean)
+
+    if selected_lines:
+        return "\n".join(selected_lines)
+
+    return raw_text
 
 def extract_cv_info(file_path: str) -> Dict:
     raw_text = load_cv_text(file_path)
     cleaned_text = normalize_text(raw_text)
 
-    skills = extract_skills(cleaned_text)
+    skill_catalog = load_skill_catalog()
+    skill_text = extract_relevant_skill_text(raw_text)
+    skills = extract_skills(skill_text, skill_catalog)
     target_role = guess_target_role(cleaned_text, skills)
     education_signals = extract_education_signals(cleaned_text)
     experience_years = guess_experience_years(cleaned_text)
