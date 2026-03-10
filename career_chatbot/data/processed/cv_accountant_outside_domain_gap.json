@@ -1,0 +1,96 @@
+{
+  "target_role_from_cv": "Unknown",
+  "domain_fit": "low",
+  "best_fit_roles": [
+    "Data Labeling",
+    "Data Analyst",
+    "Data Engineer"
+  ],
+  "strengths": [
+    "Quality Control"
+  ],
+  "missing_skills": [
+    "SQL",
+    "Excel",
+    "Power BI",
+    "Python",
+    "Statistics",
+    "Dashboarding"
+  ],
+  "top_role_result": {
+    "role": "Data Labeling",
+    "score": 0.353,
+    "matched_skills": [
+      "Quality Control"
+    ],
+    "missing_skills": [
+      "Annotation",
+      "Data Labeling"
+    ]
+  },
+  "role_ranking": [
+    {
+      "role": "Data Labeling",
+      "score": 0.353,
+      "matched_skills": [
+        "Quality Control"
+      ],
+      "missing_skills": [
+        "Annotation",
+        "Data Labeling"
+      ]
+    },
+    {
+      "role": "Data Analyst",
+      "score": 0.05,
+      "matched_skills": [],
+      "missing_skills": [
+        "Dashboarding",
+        "Excel",
+        "Power BI",
+        "Python",
+        "SQL",
+        "Statistics"
+      ]
+    },
+    {
+      "role": "Data Engineer",
+      "score": 0.05,
+      "matched_skills": [],
+      "missing_skills": [
+        "Airflow",
+        "Data Warehouse",
+        "ETL",
+        "Python",
+        "SQL",
+        "Spark"
+      ]
+    },
+    {
+      "role": "AI Engineer",
+      "score": 0.04,
+      "matched_skills": [],
+      "missing_skills": [
+        "Deep Learning",
+        "LLM",
+        "Machine Learning",
+        "PyTorch",
+        "Python",
+        "TensorFlow"
+      ]
+    },
+    {
+      "role": "AI Researcher",
+      "score": 0.04,
+      "matched_skills": [],
+      "missing_skills": [
+        "Deep Learning",
+        "Experiment Design",
+        "Machine Learning",
+        "Paper Reading",
+        "Research",
+        "Statistics"
+      ]
+    }
+  ]
+}

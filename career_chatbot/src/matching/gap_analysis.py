@@ -229,42 +229,88 @@ def build_development_plan(best_role_result: Dict, cv_info: Dict) -> List[str]:
     return plan[:5]
 
 
-def analyze_cv_against_roles(cv_info: Dict, role_profiles: Dict) -> Dict:
-    role_results = []
+def analyze_cv_against_roles(cv_info, role_profiles):
+    cv_skills = set(cv_info.get("skills", []))
+    cv_target = cv_info.get("target_role", "Unknown")
 
-    for role_name, role_profile in role_profiles.items():
-        result = score_role(cv_info, role_name, role_profile)
-        role_results.append(result)
-
-    role_results = sorted(role_results, key=lambda x: x["score"], reverse=True)
-
-    best_fit_roles = [r["role_name"] for r in role_results[:3]]
-    best_role_result = role_results[0] if role_results else {}
-
-    strengths = best_role_result.get("matched_skills", [])
-    missing_skills = best_role_result.get("missing_skills", [])
-    development_plan = build_development_plan(best_role_result, cv_info)
-
-    domain_fit = "high"
-    if best_role_result:
-        top_score = best_role_result["score"]
-        if top_score < 0.35:
-            domain_fit = "low"
-        elif top_score < 0.6:
-            domain_fit = "medium"
-
-    return {
-        "cv_file_name": cv_info.get("file_name", ""),
-        "target_role_from_cv": cv_info.get("target_role", "Unknown"),
-        "domain_fit": domain_fit,
-        "best_fit_roles": best_fit_roles,
-        "top_role_result": best_role_result,
-        "strengths": strengths,
-        "missing_skills": missing_skills,
-        "development_plan": development_plan,
-        "role_scores": role_results,
+    # ưu tiên nghề chính hơn nghề phụ
+    role_priority = {
+        "Data Analyst": 5,
+        "Data Scientist": 5,
+        "Data Engineer": 5,
+        "AI Engineer": 4,
+        "AI Researcher": 4,
+        "Data Labeling": 2
     }
 
+    role_scores = []
+
+    for role_name, role_data in role_profiles.items():
+        role_skills = set(role_data.get("common_skills", []))
+
+        matched = cv_skills & role_skills
+        missing = role_skills - cv_skills
+
+        if len(role_skills) > 0:
+            skill_score = len(matched) / len(role_skills)
+        else:
+            skill_score = 0.0
+
+        # bonus nhẹ nếu target_role khớp
+        role_match_bonus = 0.0
+        if cv_target != "Unknown" and cv_target == role_name:
+            role_match_bonus = 0.15
+
+        # bonus ưu tiên role chính
+        priority_bonus = role_priority.get(role_name, 1) * 0.01
+
+        final_score = skill_score + role_match_bonus + priority_bonus
+
+        role_scores.append({
+            "role": role_name,
+            "score": round(final_score, 3),
+            "matched_skills": sorted(list(matched)),
+            "missing_skills": sorted(list(missing))
+        })
+
+    # sort giảm dần theo score
+    role_scores.sort(key=lambda x: x["score"], reverse=True)
+
+    top_role = role_scores[0]
+    best_roles = [r["role"] for r in role_scores[:3]]
+
+    matched_count = len(top_role["matched_skills"])
+    top_score = top_role["score"]
+
+    # xác định domain fit chặt hơn
+    if cv_target == "Unknown" and matched_count < 2:
+        domain_fit = "low"
+    elif top_score >= 0.6:
+        domain_fit = "high"
+    elif top_score >= 0.3:
+        domain_fit = "medium"
+    else:
+        domain_fit = "low"
+
+    # nếu CV ngoài domain rõ ràng, ưu tiên missing skills của Data Analyst
+    fallback_role = "Data Analyst"
+    if domain_fit == "low" and fallback_role in role_profiles:
+        fallback_skills = role_profiles[fallback_role].get("common_skills", [])
+        missing_skills = [s for s in fallback_skills if s not in cv_skills]
+    else:
+        missing_skills = top_role["missing_skills"][:10]
+
+    result = {
+        "target_role_from_cv": cv_target,
+        "domain_fit": domain_fit,
+        "best_fit_roles": best_roles,
+        "strengths": top_role["matched_skills"],
+        "missing_skills": missing_skills[:10],
+        "top_role_result": top_role,
+        "role_ranking": role_scores[:5]
+    }
+
+    return result
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -282,7 +328,7 @@ def main() -> None:
 
     result = analyze_cv_against_roles(cv_info, role_profiles)
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(result, ensure_ascii=True, indent=2))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
