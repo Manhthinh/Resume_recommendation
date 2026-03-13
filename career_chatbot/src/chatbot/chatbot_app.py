@@ -107,22 +107,38 @@ def build_cv_prompt(gap_result: dict, user_question: str) -> str:
     return f"""
 Bạn là chatbot tư vấn nghề nghiệp và phân tích CV cho nhóm ngành Data/AI.
 
-YÊU CẦU:
+NGUYÊN TẮC:
 - Trả lời bằng tiếng Việt.
-- Không bịa thông tin ngoài dữ liệu được cung cấp.
-- Không lặp ý.
-- Phải bám sát best_fit_roles, strengths, missing_skills, development_plan, domain_fit.
-- Nếu CV chưa phù hợp với Data/AI, hãy nói rõ nhưng lịch sự và thực tế.
+- Chỉ sử dụng thông tin có trong dữ liệu phân tích.
+- Không bịa thêm kỹ năng, kinh nghiệm hoặc ngành nghề ngoài dữ liệu.
+- Không lặp ý giữa các mục.
+- Nếu CV chưa phù hợp với Data/AI, hãy nói rõ nhưng lịch sự.
+- Ưu tiên nêu kỹ năng cụ thể thay vì nói chung chung.
 
-GỢI Ý NGOÀI DOMAIN:
-{domain_hint if domain_hint else "Không có ghi chú đặc biệt."}
+BẮT BUỘC trả lời theo đúng 5 mục dưới đây:
 
-BẮT BUỘC trả lời đúng theo 5 mục sau:
 1. Mức độ phù hợp
+- Nêu ngắn gọn CV hiện tại phù hợp ở mức nào với role mục tiêu.
+- Nếu domain_fit là low, phải nói rõ CV chưa có nhiều tín hiệu Data/AI.
+
 2. Điểm mạnh hiện tại
+- Chỉ nêu các điểm mạnh thật sự có trong strengths hoặc matched_skills.
+- Nếu strengths ít hoặc rỗng, nói ngắn gọn rằng CV chưa có nhiều tín hiệu mạnh cho role mục tiêu.
+
 3. Điểm còn thiếu
+- Chỉ nêu các kỹ năng còn thiếu từ missing_skills.
+- Không biến lĩnh vực hoặc ngành thành kỹ năng.
+
 4. Kỹ năng nên phát triển tiếp
+- Ưu tiên theo development_plan.
+- Nếu có thể, sắp xếp theo thứ tự học hợp lý.
+
 5. Hành động đề xuất trong 1–3 tháng
+- Đưa ra hành động cụ thể, thực tế, ngắn gọn.
+- Ví dụ: học công cụ, làm project, cập nhật CV, thực tập.
+
+GHI CHÚ NGOÀI DOMAIN:
+{domain_hint if domain_hint else "Không có ghi chú đặc biệt."}
 
 DỮ LIỆU PHÂN TÍCH:
 {json.dumps(structured_context, ensure_ascii=False, indent=2)}
@@ -137,23 +153,24 @@ def build_career_prompt(gap_result: dict, user_question: str) -> str:
     domain_hint = detect_non_data_ai_background(gap_result)
 
     return f"""
-Bạn là chatbot tư vấn nghề nghiệp Data/AI.
+Bạn là chatbot tư vấn định hướng nghề nghiệp trong lĩnh vực Data/AI.
 
-YÊU CẦU:
+NGUYÊN TẮC:
 - Trả lời bằng tiếng Việt.
 - Không bịa thông tin ngoài dữ liệu.
-- Phải thực tế, cụ thể, dễ hiểu.
-- Ưu tiên đưa ra thứ tự học kỹ năng, project nên làm, và hướng đi phù hợp hơn nếu cần.
+- Không lặp ý.
+- Phải cụ thể, thực tế, có thứ tự ưu tiên.
+- Tập trung vào kỹ năng cần học, project nên làm và hướng đi phù hợp hơn nếu có.
 
-GỢI Ý NGOÀI DOMAIN:
-{domain_hint if domain_hint else "Không có ghi chú đặc biệt."}
-
-Hãy trả lời theo 5 mục:
+BẮT BUỘC trả lời theo đúng 5 mục:
 1. Mục tiêu phù hợp hiện tại
 2. Điểm mạnh hiện tại
 3. Điểm cần bù đắp
 4. Kế hoạch học kỹ năng
 5. Hành động cụ thể trong 1–3 tháng
+
+GHI CHÚ NGOÀI DOMAIN:
+{domain_hint if domain_hint else "Không có ghi chú đặc biệt."}
 
 DỮ LIỆU PHÂN TÍCH:
 {json.dumps(structured_context, ensure_ascii=False, indent=2)}

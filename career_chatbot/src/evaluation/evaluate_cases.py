@@ -43,17 +43,25 @@ def main():
 
         extracted_path = PROCESSED_DIR / f"{case['case_id']}_extracted.json"
         gap_path = PROCESSED_DIR / f"{case['case_id']}_gap.json"
+        if extracted_path.exists():
+            extracted_path.unlink()
 
+        if gap_path.exists():
+            gap_path.unlink()
         # Step 1: extract CV info
-        run_command([
+
+        extract_out = run_command([
             "python",
             str(BASE_DIR / "src" / "cv_processing" / "extract_cv_info.py"),
             "--cv_path", str(cv_path),
             "--output_path", str(extracted_path)
         ])
 
-        # Step 2: gap analysis
-        run_command([
+        if not extracted_path.exists():
+            print("FAIL: Không tạo được file extracted.")
+            continue
+
+        gap_out = run_command([
             "python",
             str(BASE_DIR / "src" / "matching" / "gap_analysis.py"),
             "--cv_json", str(extracted_path),

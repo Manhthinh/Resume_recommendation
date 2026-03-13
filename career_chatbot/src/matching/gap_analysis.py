@@ -163,7 +163,125 @@ def compute_experience_match(cv_experience_years: str, role_name: str, role_prof
         return 0.8
     return 0.7
 
+def analyze_cv_against_roles(cv_info, role_profiles):
+    cv_skills = set(cv_info.get("skills", []))
+    cv_target = cv_info.get("target_role", "Unknown")
 
+    experience_years = safe_parse_experience(cv_info.get("experience_years", 0))
+
+    role_priority = {
+        "Data Analyst": 5,
+        "Data Scientist": 5,
+        "Data Engineer": 5,
+        "AI Engineer": 4,
+        "AI Researcher": 4,
+        "Data Labeling": 1
+    }
+
+    role_scores = []
+
+    for role_name, role_data in role_profiles.items():
+        role_skills = set(role_data.get("common_skills", []))
+
+        matched_skills = cv_skills & role_skills
+        missing_skills = role_skills - cv_skills
+
+        # 1. Skill overlap
+        if len(role_skills) > 0:
+            skill_overlap_score = len(matched_skills) / len(role_skills)
+        else:
+            skill_overlap_score = 0.0
+
+        # 2. Target role match
+        target_role_match_score = 0.0
+        if cv_target != "Unknown" and cv_target == role_name:
+            target_role_match_score = 1.0
+
+        # 3. Experience score
+        if experience_years >= 3:
+            experience_score = 1.0
+        elif experience_years >= 1:
+            experience_score = 0.6
+        else:
+            experience_score = 0.3
+
+        # 4. Keyword-like score from matched skill count
+        if len(matched_skills) >= 3:
+            keyword_score = 1.0
+        elif len(matched_skills) >= 1:
+            keyword_score = 0.5
+        else:
+            keyword_score = 0.0
+
+        priority_bonus = role_priority.get(role_name, 1) * 0.01
+
+        final_score = (
+            0.5 * skill_overlap_score +
+            0.2 * target_role_match_score +
+            0.2 * keyword_score +
+            0.1 * experience_score +
+            priority_bonus
+        )
+
+        role_scores.append({
+            "role": role_name,
+            "score": round(final_score, 3),
+            "skill_overlap_score": round(skill_overlap_score, 3),
+            "target_role_match_score": round(target_role_match_score, 3),
+            "keyword_match_score": round(keyword_score, 3),
+            "experience_score": round(experience_score, 3),
+            "matched_skills": sorted(list(matched_skills)),
+            "missing_skills": sorted(list(missing_skills))
+        })
+
+    # Nếu role_profiles rỗng thì trả kết quả an toàn
+    if not role_scores:
+        return {
+            "target_role_from_cv": cv_target,
+            "domain_fit": "low",
+            "best_fit_roles": [],
+            "strengths": [],
+            "missing_skills": [],
+            "top_role_result": {},
+            "role_ranking": []
+        }
+
+    role_scores.sort(key=lambda x: x["score"], reverse=True)
+
+    top_role = role_scores[0]
+    best_roles = [r["role"] for r in role_scores[:3]]
+
+    matched_count = len(top_role["matched_skills"])
+    top_score = top_role["score"]
+
+    # Domain fit logic
+    if cv_target == "Unknown" and matched_count < 2:
+        domain_fit = "low"
+    elif top_score >= 0.6:
+        domain_fit = "high"
+    elif top_score >= 0.35:
+        domain_fit = "medium"
+    else:
+        domain_fit = "low"
+
+    # Nếu ngoài domain thì fallback missing skills về Data Analyst
+    if domain_fit == "low" and "Data Analyst" in role_profiles:
+        da_skills = set(role_profiles["Data Analyst"].get("common_skills", []))
+        missing_skills = sorted(list(da_skills - cv_skills))
+    else:
+        missing_skills = top_role["missing_skills"]
+
+    result = {
+        "target_role_from_cv": cv_target,
+        "domain_fit": domain_fit,
+        "best_fit_roles": best_roles,
+        "strengths": top_role["matched_skills"],
+        "missing_skills": missing_skills[:10],
+        "top_role_result": top_role,
+        "role_ranking": role_scores[:5]
+    }
+
+    return result
 def score_role(cv_info: Dict, role_name: str, role_profile: Dict) -> Dict:
     cv_skills = cv_info.get("skills", [])
     role_skills = role_profile.get("common_skills", [])
@@ -185,12 +303,22 @@ def score_role(cv_info: Dict, role_name: str, role_profile: Dict) -> Dict:
     target_role = str(cv_info.get("target_role", "")).strip().lower()
     if target_role and target_role != "unknown" and role_name.lower() == target_role:
         target_role_match_score = 1.0
+    role_priority = {
+            "Data Analyst": 5,
+            "Data Scientist": 5,
+            "Data Engineer": 5,
+            "AI Engineer": 4,
+            "AI Researcher": 4,
+            "Data Labeling": 1
+        }
 
+    priority_bonus = role_priority.get(role_name, 1) * 0.01
     final_score = (
         0.5 * skill_overlap_score
         + 0.2 * keyword_match_score
         + 0.2 * experience_match_score
         + 0.1 * target_role_match_score
+        + priority_bonus
     )
 
     return {
@@ -228,89 +356,18 @@ def build_development_plan(best_role_result: Dict, cv_info: Dict) -> List[str]:
 
     return plan[:5]
 
+def safe_parse_experience(value):
+    try:
+        if value is None:
+            return 0
+        text = str(value).strip().lower()
+        if text in ["unknown", "", "none", "null"]:
+            return 0
+        return int(text)
+    except Exception:
+        return 0
 
-def analyze_cv_against_roles(cv_info, role_profiles):
-    cv_skills = set(cv_info.get("skills", []))
-    cv_target = cv_info.get("target_role", "Unknown")
 
-    # ưu tiên nghề chính hơn nghề phụ
-    role_priority = {
-        "Data Analyst": 5,
-        "Data Scientist": 5,
-        "Data Engineer": 5,
-        "AI Engineer": 4,
-        "AI Researcher": 4,
-        "Data Labeling": 2
-    }
-
-    role_scores = []
-
-    for role_name, role_data in role_profiles.items():
-        role_skills = set(role_data.get("common_skills", []))
-
-        matched = cv_skills & role_skills
-        missing = role_skills - cv_skills
-
-        if len(role_skills) > 0:
-            skill_score = len(matched) / len(role_skills)
-        else:
-            skill_score = 0.0
-
-        # bonus nhẹ nếu target_role khớp
-        role_match_bonus = 0.0
-        if cv_target != "Unknown" and cv_target == role_name:
-            role_match_bonus = 0.15
-
-        # bonus ưu tiên role chính
-        priority_bonus = role_priority.get(role_name, 1) * 0.01
-
-        final_score = skill_score + role_match_bonus + priority_bonus
-
-        role_scores.append({
-            "role": role_name,
-            "score": round(final_score, 3),
-            "matched_skills": sorted(list(matched)),
-            "missing_skills": sorted(list(missing))
-        })
-
-    # sort giảm dần theo score
-    role_scores.sort(key=lambda x: x["score"], reverse=True)
-
-    top_role = role_scores[0]
-    best_roles = [r["role"] for r in role_scores[:3]]
-
-    matched_count = len(top_role["matched_skills"])
-    top_score = top_role["score"]
-
-    # xác định domain fit chặt hơn
-    if cv_target == "Unknown" and matched_count < 2:
-        domain_fit = "low"
-    elif top_score >= 0.6:
-        domain_fit = "high"
-    elif top_score >= 0.3:
-        domain_fit = "medium"
-    else:
-        domain_fit = "low"
-
-    # nếu CV ngoài domain rõ ràng, ưu tiên missing skills của Data Analyst
-    fallback_role = "Data Analyst"
-    if domain_fit == "low" and fallback_role in role_profiles:
-        fallback_skills = role_profiles[fallback_role].get("common_skills", [])
-        missing_skills = [s for s in fallback_skills if s not in cv_skills]
-    else:
-        missing_skills = top_role["missing_skills"][:10]
-
-    result = {
-        "target_role_from_cv": cv_target,
-        "domain_fit": domain_fit,
-        "best_fit_roles": best_roles,
-        "strengths": top_role["matched_skills"],
-        "missing_skills": missing_skills[:10],
-        "top_role_result": top_role,
-        "role_ranking": role_scores[:5]
-    }
-
-    return result
 
 def main() -> None:
     parser = argparse.ArgumentParser()
